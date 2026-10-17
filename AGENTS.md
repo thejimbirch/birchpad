@@ -46,6 +46,9 @@ Check a deploy in `~/Library/Application Support/Logi/LogiPluginService/Logs/plu
 - Actions load before `Plugin.Load`, so an action that subscribes to a service Load creates never hears it; raise change events from the plugin object instead (`HubChanged`, `HerdrChanged`).
 - The host adds its own folder Back key unless `GetNavigationArea` returns `EncoderArea`.
 - Folder pages are built on a worker thread; never do file, process, or HTTP work on the host thread or under `MenuFolder`'s lock.
+- Start child processes with `ProcessRunner` or `ChildProcess`, never `Process.Start`, which puts them in the plugin service's process group (`CreateNewProcessGroup` does nothing on macOS).
+  A git that `codex app-server` ran to check git-sourced plugin marketplaces sent SIGHUP to that group, and the service died with no log line, crash report, or exception.
+  `log show --predicate 'process == "launchd"'` names the signal and its sender ("exited due to SIGHUP | sent by git[pid]").
 - Claude Desktop accepts only fixed `claude://claude.ai/` routes (`chat`, `project`, `new`, `settings`, `tasks`, `cowork`, `customize`, and a few more).
   Pages without a route (Artifacts, Design, Scheduled) are opened by pressing the sidebar button by name (`MacAutomation.PressButton`).
 - Installed profiles live in `~/Library/Application Support/Logi/LogiPluginService/Applications/Loupedeck70/@_birchpad<app>/Profiles/<id>/ProfileInfo.json`; read them to see which action IDs a keypad's keys point at.

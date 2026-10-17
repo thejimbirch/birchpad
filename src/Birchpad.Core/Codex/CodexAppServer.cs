@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.Text.Json.Nodes;
+using Birchpad.Core.Mac;
 
 namespace Birchpad.Core.Codex;
 
@@ -111,26 +111,12 @@ public sealed class CodexAppServer
     /// <summary>Starts the app server, initializes, sends one request, and returns its result or null.</summary>
     private JsonNode? Request(string method, JsonObject parameters)
     {
-        var info = new ProcessStartInfo(this.codexPath)
-        {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        info.ArgumentList.Add("app-server");
-
-        using var process = Process.Start(info);
-        if (process is null)
-        {
-            return null;
-        }
-
+        // Its own session: the app server runs git to check git-sourced plugin marketplaces, and that git once
+        // hung up the whole process group, which was the plugin service's.
+        using var process = ChildProcess.Start(this.codexPath, ["app-server"], redirectInput: true, captureError: false);
         try
         {
-            process.ErrorDataReceived += (_, _) => { };
-            process.BeginErrorReadLine();
-            Send(process, new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 1, ["method"] = "initialize", ["params"] = new JsonObject { ["clientInfo"] = new JsonObject { ["name"] = "birchpad", ["version"] = "0.1.0" } } });
+            Send(process,new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 1, ["method"] = "initialize", ["params"] = new JsonObject { ["clientInfo"] = new JsonObject { ["name"] = "birchpad", ["version"] = "0.1.0" } } });
             if (ReadResponse(process, 1, this.Timeout) is null)
             {
                 return null;
@@ -142,20 +128,18 @@ public sealed class CodexAppServer
         }
         finally
         {
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
+            // Also ends any git the app server left running, since it shares the app server's process group.
+            process.Kill();
         }
     }
 
-    private static void Send(Process process, JsonObject message)
+    private static void Send(ChildProcess process, JsonObject message)
     {
-        process.StandardInput.WriteLine(message.ToJsonString());
+        process.StandardInput!.WriteLine(message.ToJsonString());
         process.StandardInput.Flush();
     }
 
-    private static JsonObject? ReadResponse(Process process, int id, TimeSpan timeout)
+    private static JsonObject? ReadResponse(ChildProcess process, int id, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)

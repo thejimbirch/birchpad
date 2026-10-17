@@ -160,8 +160,10 @@ import glob, json, os, zipfile
 src = "profiles/generated/Birchpad Agents.lp5"
 dst = "dist/Birchpad Agents.lp5"
 apps = os.path.expanduser("~/Library/Application Support/Logi/LogiPluginService/Applications/Loupedeck70")
-mine = next(json.load(open(f))["name"] for f in glob.glob(f"{apps}/@_defaultmac/Profiles/*/ProfileInfo.json")
-            if json.load(open(f)).get("displayName") == "Default General Profile")
+general = [json.load(open(f, encoding="utf-8-sig")) for f in sorted(glob.glob(f"{apps}/@_defaultmac/Profiles/*/ProfileInfo.json"))]
+named = [p for p in general if p.get("displayName") == "Default General Profile"]
+target = (named or general)[0]
+mine = target["name"]
 with zipfile.ZipFile(src) as zin:
     info = json.loads(zin.read("ProfileInfo.json").decode("utf-8-sig"))
     theirs = info["profileActions"][0]["actionParameters"]["parameters"]["profileName"]
@@ -172,12 +174,13 @@ with zipfile.ZipFile(src) as zin:
             if item.filename == "ProfileInfo.json":
                 data = data.decode("utf-8-sig").replace(theirs, mine).encode("utf-8")
             zout.writestr(item, data)
-print(f"wrote {dst}; Switch profile points at {mine}")
+print(f"wrote {dst}; Switch profile points at {target.get('displayName')} ({mine})")
 EOF
 ```
 
 Run it from the repository root.
-It needs a profile named "Default General Profile" in Options+, which Options+ creates for the keypad.
+It points Switch profile at the keypad's "Default General Profile", which Options+ creates for the keypad.
+If that profile was renamed, it uses the first General profile instead; the last line names the one it chose.
 
 ### Import it
 
